@@ -1,50 +1,40 @@
----client table
-create table client(
-    clno char(3) primary key,
-    name varchar(12),
-    address varchar(30)
-);
-
---- stock table
-create table stock(
-    company char(7) primary key,
-    price number(6,2),
-    divident number(4,2),
-    eps number(4,2)
-);
-
---- trade table
-create table trade(
-    company char(7),
-    exchange varchar(12),
-    primary key (company, exchange),
-    foreign key (company) references stock(company)
-);
-
---- purchase table
-create table purchase(
-    clno char(3),
-    company char(7),
-    pdate date,
-    qty number(6),
-    price number(6,2),
-    primary key (clno, company, pdate),
-    foreign key(clno) references client(clno),
-    foreign key (company) references stock(company)
-);
+--- Dataase System | Practical 01
+--- IT21158490 | Dissanayake D M A P
 
 
+--- Question 02 --- Creating tables and Inserting Values
 
 
----insert data to client
+--- creating client table
 
+create table client( 
+    clno char(3), 
+    name varchar(12), 
+    address varchar(30) ,
+    constraint client_PK PRIMARY KEY(clno)
+)
+--- inserting values to the client table
+    
 insert into client values('c01','John Smith','3 east AV, Bentley, WA 6102');
-insert into client values('c02','Jill Brody','42 Bent St Perth WA 6001');
-insert into client values('c03','Aj Proudy','21/6, Galgamuwa, Sri Lanka');
+insert into client values('c02','Jill Brody','42 Bent St, Perth, WA 6001');
+insert into client values('c03','Bob philiphs','22 pheps, New Bard, Canada');
+
+--- visualizing the client table data
 
 select * from client;
 
---- insert data to stock
+
+
+--- creating stock table
+create table stock( 
+    company char(7), 
+    price number(6,2), 
+    divident number(4,2), 
+    eps number(4,2),
+    constraint stock_PK PRIMARY KEY(company)
+)
+
+--- inserting values to the stock table
 
 insert into stock values('BHP',10.50, 1.50, 3.20);
 insert into stock values('IBM',70.00, 4.25, 10.00);
@@ -53,19 +43,103 @@ insert into stock values('FORD',40.00, 2.00, 8.50);
 insert into stock values('GM',60.00, 2.50, 9.20);
 insert into stock values('INFOSYS',45.00, 3.00, 7.80);
 
+--- visualizing the stock table data
+
 select * from stock;
 
---- insert data to purchase
+
+
+--- creating trade table
+create table trade( 
+    company char(7), 
+    exchange varchar(12), 
+    constraint trade_PK PRIMARY KEY(company,exchange),
+    constraint trade_exchange_FK FOREIGN KEY(company) REFERENCES stock 
+)
+
+--- inserting values to the trade table
+
+insert into trade values('BHP','Sydney');
+insert into trade values('BHP','New York');
+insert into trade values('IBM','New York');
+insert into trade values('IBM','London');
+insert into trade values('IBM','Tokyo');
+insert into trade values('INTEL','New York');
+insert into trade values('INTEL','London');
+insert into trade values('FORD','New York');
+insert into trade values('GM','New York');
+insert into trade values('INFOSYS','New York');
+
+--- visualizing the stock table data
+
+select * from trade;
+
+
+
+--- creating purchase table
+create table purchase( 
+    clno char(3), 
+    company char(7), 
+    pdate date, 
+    qty number(6), 
+    price number(6,2), 
+    constraint purchase_PK PRIMARY KEY(clno,company,pdate),
+    constraint purchase_FK1 FOREIGN KEY(clno) REFERENCES client,
+    constraint purchase_FK2 FOREIGN KEY(company) REFERENCES stock
+)
+
+
 insert into purchase values('c01','BHP', to_date('02/sep/01'), 12.00, 1000);
 insert into purchase values('c01','BHP', to_date('08/jun/02'), 10.50, 2000);
 insert into purchase values('c01','IBM', to_date('12/feb/00'), 58.00, 500);
 insert into purchase values('c01','IBM', to_date('10/apr/01'), 65.00, 1200);
 insert into purchase values('c01','INFOSYS', to_date('11/aug/01'), 64.00, 1000);
 
+--- visualizing the purchase table data
+
 select * from purchase;
 
----ANSWERS
----(a)
-select c.name, s.cname, s.price, s.divident, s.eps
-from client c, stock s, purchase p
-where c.clno = p.clno and s.cname = p.cname
+--- Question 03 
+
+--- 03 (a) 
+--- For each client, get the client’s name, and the list of the client’s investments with stock name, current price, last dividend and earnings per share.
+
+select distinct c.name, p.company, s.price, s.divident, s.eps
+from client c, purchase p, stock s
+where c.clno = p.clno and p.company = s.company;
+
+--- 03 (b) 
+--- Get the list of all clients and their share investments, showing the client name, and for each stock held by the client, the name of the stock, total number of shares held, 
+--- and the average purchase price paid by the client for the stock. Average price is the total purchase value paid by a client for a given stock (value=qty*price) divided by 
+--- the total quantity held by the client.
+
+select c.name, p.company, sum(p.qty) total_qty, sum(p.qty*p.price)/sum(p.qty) APP
+from client c, purchase p
+where c.clno = p.clno
+group by c.name, p.company;
+
+--- 03 (c)
+--- For each stock traded in New York, find the quantity held by each client, and its current value (value=qty*price). Display stock (company) name, client name, number 
+--- of shares held, and the current value of the shares.
+
+select p.company, c.name, sum(p.qty), sum(p.qty*s.price) current_value
+from client c, purchase p, stock s, trade t
+where c.clno = p.clno and p.company = s.company and s.company=t.company and t.exchange='New York'
+group by p.company, c.name;
+
+--- 03 (d)
+--- Find the total purchase value of investments for all clients. Display client name and total purchase value of the client’s portfolio.
+
+select c.name, sum(p.qty*p.price) total_pprice
+from client c, purchase p
+where c.clno = p.clno
+group by c.name;
+
+--- 03 (e)
+--- For each client, list the book profit (or loss) on the total share investment. Book profit is the total value of all stocks based on the current prices less the total amount paid 
+--- for purchasing them. 
+
+select c.name, sum(p.qty*(s.price-p.price)) book_profit
+from client c, purchase p, stock s
+where c.clno = p.clno and p.company = s.company
+group by c.name;
