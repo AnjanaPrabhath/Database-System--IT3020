@@ -1,0 +1,155 @@
+--- Dataase System | Practical 04
+--- IT21158490 | Dissanayake D M A P
+
+
+
+(a) A method to compute the yield of stocks: Yield is the dividend expressed as a percentage of the current price (yield = (dividend/current price) *100). Assume that all dividends are for a period of one year.
+
+ALTER TYPE STOCK_T
+ADD MEMBER FUNCTION YIELDS
+RETURN FLOAT CASCADE
+/
+
+CREATE OR REPLACE TYPE BODY STOCK_T AS
+MEMBER FUNCTION YIELDS
+RETURN FLOAT IS
+	BEGIN
+		RETURN (SELF.LASTDIVIDEND / SELF.PRICE) * 100;
+	END;
+END;
+/
+
+(b) A method to compute the current price of stocks in US dollars, taking the current exchange rate of AUD to USD as an input parameter (assuming that the prices in the STOCKS table are in AUD).
+
+ALTER TYPE STOCK_T
+ADD MEMBER FUNCTION AUDTOUSD(RATE FLOAT)
+RETURN FLOAT CASCADE
+/
+
+CREATE OR REPLACE TYPE BODY STOCK_T AS
+MEMBER FUNCTION AUDTOUSD(RATE FLOAT)
+RETURN FLOAT IS
+	BEGIN
+		RETURN SELF.PRICE * RATE;
+	END AUDTOUSD;
+MEMBER FUNCTION YIELDS
+RETURN FLOAT IS
+	BEGIN
+		RETURN (SELF.LASTDIVIDEND / SELF.PRICE) * 100;
+	END YIELDS;
+END;
+/
+
+(c) A method to count the number of exchanges where a given stock is traded.
+
+ALTER TYPE STOCK_T
+ADD MEMBER FUNCTION totalExchanges
+RETURN INTEGER CASCADE
+/
+
+CREATE OR REPLACE TYPE BODY STOCK_T AS
+MEMBER FUNCTION totalExchanges
+RETURN INTEGER IS
+	exchangeCount INTEGER;
+	BEGIN
+		SELECT COUNT(*) INTO exchangeCount FROM TABLE(SELF.EXCHANGE) e;
+		RETURN exchangeCount;
+	END totalExchanges;
+MEMBER FUNCTION YIELDS
+RETURN FLOAT IS
+	BEGIN
+		RETURN (SELF.LASTDIVIDEND / SELF.PRICE) * 100;
+	END YIELDS;
+MEMBER FUNCTION AUDTOUSD(RATE FLOAT)
+RETURN FLOAT IS
+	BEGIN
+		RETURN SELF.PRICE * RATE;
+	END AUDTOUSD;
+END;
+/
+
+(d) A method to compute the purchase value of all the shares of a client (for each share purchased, purchase value = purchase price * qty).
+
+ALTER TYPE CLIENT_T
+ADD MEMBER FUNCTION TOTPURCHASE
+RETURN FLOAT CASCADE
+/
+
+CREATE OR REPLACE TYPE BODY CLIENT_T AS
+MEMBER FUNCTION TOTPURCHASE
+RETURN FLOAT IS
+   	PPRICE FLOAT;
+	PQTY FLOAT;
+	BEGIN
+    		SELECT i.PRICE, i.QTY INTO PPRICE, PQTY
+    		FROM TABLE(SELF.INVESTMENTS) i;
+    		RETURN PPRICE * PQTY;
+	END;
+END;
+/
+
+(e) A method to compute the total profit on all the shares of a client (for each share purchase, profit = 
+(current price - purchase price) * qty).
+
+ALTER TYPE CLIENT_T
+ADD MEMBER FUNCTION CALPROFIT
+RETURN FLOAT CASCADE
+/
+
+CREATE OR REPLACE TYPE BODY CLIENT_T AS
+MEMBER FUNCTION CALPROFIT
+RETURN FLOAT IS
+	PPRICE FLOAT;
+	PQTY FLOAT;
+	CPRICE FLOAT;
+	BEGIN
+		SELECT i.PRICE, i.QTY, i.COMPANY.PRICE INTO PPRICE, PQTY, CPRICE
+		FROM TABLE(SELF.INVESTMENTS) i;
+		RETURN (CPRICE - PPRICE) * PQTY;
+	END CALPROFIT;
+MEMBER FUNCTION TOTPURCHASE
+RETURN FLOAT IS
+	PPRICE FLOAT;
+	PQTY FLOAT;
+	BEGIN
+    		SELECT i.PRICE, i.QTY INTO PPRICE, PQTY
+    		FROM TABLE(SELF.INVESTMENTS) i;
+    		RETURN PPRICE * PQTY;
+	END TOTPURCHASE;
+END;
+/
+
+(a) Get the yield of all stocks along with their current prices in US dollars, given an exchange rate of 0.74 USD to an AUD. Display the name of the stock, the exchanges where the stock is traded, the stock’s yield and the price in USD.
+
+SELECT s.COMPANY, s.totalExchanges() EXCHANGES, s.YIELDS() YIELD, s.AUDTOUSD(0.74) PRICE
+FROM STOCKS s
+/
+
+(b) Find the company name, current price and the number of exchanges for shares that are traded on more than one exchange, using one of the methods.
+
+SELECT s.COMPANY, s.PRICE, s.totalExchanges() EXCHANGES
+FROM STOCKS s
+WHERE s.totalExchanges() > 1
+/
+
+(c) For each client, get the name, and the list of investments with stock name, yield, current price and earnings per share. Use the method for computing yield in this query.
+
+SELECT c.NAME, 
+	i.COMPANY.COMPANY STOCK, 
+	i.COMPANY.YIELDS() YIELDS,
+	i.COMPANY.PRICE PRICE,
+	i.COMPANY.EPS EARNINGS
+FROM CLIENTS c, TABLE(c.INVESTMENTS) i
+/
+
+(d) Find the total purchase value of investments for all clients. Display client name and total value. Use the method for computing purchase value in this query.
+
+SELECT c.NAME, c.TOTPURCHASE() TOTAL
+FROM CLIENTS c
+/
+
+(e) For each client, list the book profit (or loss) on the total share investment. Use the method for computing profit.
+
+SELECT c.NAME, c.CALPROFIT()
+FROM CLIENTS c
+/
