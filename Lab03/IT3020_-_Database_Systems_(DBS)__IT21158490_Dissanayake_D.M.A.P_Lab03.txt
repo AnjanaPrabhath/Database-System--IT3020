@@ -1,0 +1,177 @@
+--- Dataase System | Practical 03
+--- IT21158490 | Dissanayake D M A P
+
+
+-- QUESTION 01
+
+CREATE TYPE ADDRESS AS OBJECT (
+    STREET_NUMBER NUMBER,
+    STREET_NAME VARCHAR2(50),
+    SUBURB VARCHAR2(50),
+    STATE VARCHAR2(50),
+    PIN VARCHAR2(10)
+);
+
+CREATE TYPE EXCHANGES_TYPE AS VARRAY(10) OF VARCHAR2(50);
+
+CREATE TYPE INVESTMENTS AS TABLE OF EXCHANGES_TYPE;
+
+
+CREATE TABLE CLIENTS (
+    CLIENT_NUMBER NUMBER PRIMARY KEY,
+    FIRST_NAME VARCHAR2(50),
+    LAST_NAME VARCHAR2(50),
+    CLIENT_ADDRESS ADDRESS,
+    CLIENT_INVESTMENTS INVESTMENTS
+);
+
+-- QUESTION 02
+
+-- Create ADDRESS object type
+
+CREATE TYPE ADDRESS AS OBJECT (
+    STREET_NUMBER NUMBER,
+    STREET_NAME VARCHAR2(50),
+    SUBURB VARCHAR2(50),
+    STATE VARCHAR2(50),
+    PIN VARCHAR2(10)
+);
+
+-- Create EXCHANGES_TYPE VARRAY type
+
+CREATE TYPE EXCHANGES_TYPE AS VARRAY(10) OF VARCHAR2(50);
+
+-- Create CLIENTS table
+
+CREATE TABLE CLIENTS (
+    CLIENT_NUMBER NUMBER PRIMARY KEY,
+    FIRST_NAME VARCHAR2(50),
+    LAST_NAME VARCHAR2(50),
+    CLIENT_ADDRESS ADDRESS,
+    CLIENT_INVESTMENTS INVESTMENTS
+);
+
+-- Create STOCKS table
+
+CREATE TABLE STOCKS (
+    COMPANY VARCHAR2(50) PRIMARY KEY,
+    CURRENT_PRICE NUMBER,
+    EXCHANGES EXCHANGES_TYPE,
+    TRADED_LAST NUMBER,
+    DIVIDEND NUMBER,
+    EARNING_PER_SHARE NUMBER
+);
+
+-- Insert sample data into CLIENTS table
+
+INSERT INTO CLIENTS VALUES (
+    1,
+    'John',
+    'Smith',
+    ADDRESS(3, 'East Av', 'Bentley', 'WA', '6102'),
+    INVESTMENTS(
+        EXCHANGES_TYPE('BHP', '12.00', '02/10/01', '1000'),
+        EXCHANGES_TYPE('BHP', '10.50', '08/06/02', '2000'),
+        EXCHANGES_TYPE('IBM', '58.00', '12/02/00', '500'),
+        EXCHANGES_TYPE('IBM', '65.00', '10/04/01', '1200'),
+        EXCHANGES_TYPE('INFOSYS', '64.00', '11/08/01', '1000')
+    )
+);
+
+INSERT INTO CLIENTS VALUES (
+    2,
+    'Jill',
+    'Brody',
+    ADDRESS(42, 'Bent St', 'Perth', 'WA', '6001'),
+    INVESTMENTS(
+        EXCHANGES_TYPE('INTEL', '35.00', '30/01/00', '300'),
+        EXCHANGES_TYPE('INTEL', '54.00', '30/01/01', '400'),
+        EXCHANGES_TYPE('INTEL', '60.00', '02/10/01', '200'),
+        EXCHANGES_TYPE('FORD', '40.00', '05/10/99', '300'),
+        EXCHANGES_TYPE('GM', '55.50', '12/12/00', '500')
+    )
+);
+
+-- Insert sample data into STOCKS table
+
+INSERT INTO STOCKS VALUES ('BHP', 10.50, EXCHANGES_TYPE('Sydney', 'New York'), 1.50, 3.20);
+INSERT INTO STOCKS VALUES ('IBM', 70.00, EXCHANGES_TYPE('New York', 'London', 'Tokyo'), 4.25, 10.00);
+INSERT INTO STOCKS VALUES ('INTEL', 76.50, EXCHANGES_TYPE('New York', 'London'), 5.00, 12.40);
+INSERT INTO STOCKS VALUES ('FORD', 40.00, EXCHANGES_TYPE('New York'), 2.00, 8.50);
+INSERT INTO STOCKS VALUES ('GM', 60.00, EXCHANGES_TYPE('New York'), 2.50, 9.20);
+INSERT INTO STOCKS VALUES ('INFOSYS', 45.00, EXCHANGES_TYPE('New York'), 3.00, 7.80);
+
+
+-- QUESTION 03
+
+--a)
+
+SELECT c.first_name || ' ' || c.last_name AS client_name,
+       i.column_value.company AS stock_name,
+       s.current_price,
+       s.last_dividend,
+       s.earning_per_share
+FROM clients c, TABLE(c.client_investments) i, stocks s
+WHERE i.column_value.company = s.company;
+
+--b)
+
+SELECT c.first_name || ' ' || c.last_name AS client_name,
+       i.column_value.company AS stock_name,
+       SUM(i.column_value.qty) AS total_shares,
+       SUM(i.column_value.qty * TO_NUMBER(i.column_value.price)) / SUM(i.column_value.qty) AS average_purchase_price
+FROM clients c, TABLE(c.client_investments) i
+GROUP BY c.client_number, c.first_name, c.last_name, i.column_value.company;
+
+
+--c)
+
+SELECT s.company AS stock_name,
+       c.first_name || ' ' || c.last_name AS client_name,
+       i.column_value.qty AS shares_held,
+       i.column_value.qty * s.current_price AS current_value
+FROM stocks s, TABLE(s.exchanges) e, clients c, TABLE(c.client_investments) i
+WHERE e.column_value = 'New York' AND i.column_value.company = s.company;
+
+
+--d)
+
+SELECT c.first_name || ' ' || c.last_name AS client_name,
+       SUM(i.column_value.qty * TO_NUMBER(i.column_value.price)) AS total_purchase_value
+FROM clients c, TABLE(c.client_investments) i
+GROUP BY c.client_number, c.first_name, c.last_name;
+
+--e)
+
+SELECT c.first_name || ' ' || c.last_name AS client_name,
+       SUM(i.column_value.qty * s.current_price) - SUM(i.column_value.qty * TO_NUMBER(i.column_value.price)) AS book_profit
+FROM clients c, TABLE(c.client_investments) i, stocks s
+WHERE i.column_value.company = s.company
+GROUP BY c.client_number, c.first_name, c.last_name;
+
+
+-- Question(4)
+
+-- Remove John's INFOSYS stocks and insert corresponding records for Jill 
+
+DELETE FROM TABLE(SELECT client_investments FROM clients WHERE client_number = 1) WHERE column_value.company = 'INFOSYS';
+
+INSERT INTO TABLE(SELECT client_investments FROM clients WHERE client_number = 2)
+VALUES (EXCHANGES_TYPE('INFOSYS', '64.00', '11/08/01', '1000'));
+
+-- Remove Jill's GM stocks and insert corresponding records for John
+
+DELETE FROM TABLE(SELECT client_investments FROM clients WHERE client_number = 2) WHERE column_value.company = 'GM';
+
+INSERT INTO TABLE(SELECT client_investments FROM clients WHERE client_number = 1)
+VALUES (EXCHANGES_TYPE('GM', '60.00', '12/12/00', '500'));
+
+-- Check the updated state using query 3(a)
+
+SELECT c.first_name || ' ' || c.last_name AS client_name,
+       i.column_value.company AS stock_name,
+       s.current_price,
+       s.last_dividend,
+       s.earning_per_share
+FROM clients c, TABLE(c.client_investments) i, stocks s
+WHERE i.column_value.company = s.company;
