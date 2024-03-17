@@ -2,154 +2,180 @@
 --- IT21158490 | Dissanayake D M A P
 
 
-
-(a) A method to compute the yield of stocks: Yield is the dividend expressed as a percentage of the current price (yield = (dividend/current price) *100). Assume that all dividends are for a period of one year.
-
-ALTER TYPE STOCK_T
-ADD MEMBER FUNCTION YIELDS
-RETURN FLOAT CASCADE
+create type addr_t as object( 
+	stNo varchar(5), 
+	stName varchar(30), 
+	suburb varchar(30), 
+	state varchar(30), 
+	pin varchar(5) 
+); 
 /
 
-CREATE OR REPLACE TYPE BODY STOCK_T AS
-MEMBER FUNCTION YIELDS
-RETURN FLOAT IS
-	BEGIN
-		RETURN (SELF.LASTDIVIDEND / SELF.PRICE) * 100;
-	END;
+create type exchanges_arr as varray(5) of varchar(30); 
+/
+
+create type stock_t as object( 
+	company varchar(10), 
+	cprice number(6,2), 
+	et exchanges_arr, 
+	dividend number(6,2), 
+	eps number(6,2) 
+); 
+/
+
+create type invest_t as object( 
+	company ref stock_t, 
+	pprice number(6,2), 
+	pdate date, 
+	qty integer 
+); 
+/
+
+create type invest as table of invest_t; 
+/
+
+create type client_t as object( 
+	name varchar(30), 
+	address addr_t, 
+	investments invest 
+); 
+/
+
+create table stocks of stock_t(company primary key);
+
+create table clients of client_t(name primary key) nested table investments store as invest_tab;
+
+insert into stocks values('BHP', 10.50, exchanges_arr('Sydney','New York'), 1.50, 3.20);
+
+insert into stocks values('IBM', 70.00, exchanges_arr('New York','London','Tokyo'), 4.25, 10.00);
+
+insert into stocks values('INTEL',76.50, exchanges_arr('New York','London'), 5.00, 12.40);
+
+insert into stocks values('FORD', 40.00, exchanges_arr('New York'), 2.00, 8.50);
+
+insert into stocks values('GM', 60.00, exchanges_arr('New York'), 2.50, 9.20);
+
+insert into stocks values('INFOSYS', 45.00, exchanges_arr('New York'), 3.00, 7.80);
+
+INSERT INTO clients VALUES ('John Smith',addr_t('3', 'East Av', 'Bentley', 'WA', '6102'), 
+    invest( 
+         invest_t((SELECT REF(s) FROM stocks s WHERE s.company = 'BHP'), 12.00, TO_DATE('02/10/01', 'DD/MM/YY'), 1000), 
+         invest_t((SELECT REF(s) FROM stocks s WHERE s.company = 'BHP'), 10.50, TO_DATE('08/06/02', 'DD/MM/YY'), 2000), 
+         invest_t((SELECT REF(s) FROM stocks s WHERE s.company = 'IBM'), 58.00, TO_DATE('12/02/00', 'DD/MM/YY'), 500), 
+         invest_t((SELECT REF(s) FROM stocks s WHERE s.company = 'IBM'), 65.00, TO_DATE('10/04/01', 'DD/MM/YY'), 1200), 
+         invest_t((SELECT REF(s) FROM stocks s WHERE s.company = 'INFOSYS'), 64.00, TO_DATE('11/08/01', 'DD/MM/YY'), 1000) 
+    ) 
+);
+
+INSERT INTO clients VALUES ('Jill Brody',addr_t('42', ' Bent St', 'Perth', 'WA', '6001'), 
+    invest( 
+         invest_t((SELECT REF(s) FROM stocks s WHERE s.company = 'INTEL'), 35.00, TO_DATE('30/01/00', 'DD/MM/YY'), 300), 
+         invest_t((SELECT REF(s) FROM stocks s WHERE s.company = 'INTEL'), 54.00, TO_DATE('30/01/01', 'DD/MM/YY'), 400), 
+         invest_t((SELECT REF(s) FROM stocks s WHERE s.company = 'INTEL'), 60.00, TO_DATE('02/10/01', 'DD/MM/YY'), 200), 
+         invest_t((SELECT REF(s) FROM stocks s WHERE s.company = 'FORD'), 40.00, TO_DATE('05/10/99', 'DD/MM/YY'), 300), 
+         invest_t((SELECT REF(s) FROM stocks s WHERE s.company = 'GM'), 55.50, TO_DATE('12/12/00', 'DD/MM/YY'), 500) 
+    ) 
+);
+
+ALTER TYPE stock_t 
+ADD MEMBER FUNCTION calYield RETURN FLOAT CASCADE;
+
+CREATE OR REPLACE TYPE BODY stock_t AS 
+  MEMBER FUNCTION calYield RETURN FLOAT IS 
+  BEGIN 
+    RETURN ((SELF.DIVIDEND / SELF.CPRICE) * 100); 
+  END; 
+END; 
+/
+
+ALTER TYPE stock_t 
+ADD MEMBER FUNCTION priceInUSD(rate FLOAT) RETURN FLOAT CASCADE;
+
+CREATE OR REPLACE TYPE BODY stock_t AS 
+  MEMBER FUNCTION calYield RETURN FLOAT IS 
+  BEGIN 
+    RETURN ((SELF.DIVIDEND / SELF.CPRICE) * 100); 
+  END calYield; 
+ 
+  MEMBER FUNCTION priceInUSD(rate FLOAT) RETURN FLOAT IS 
+  BEGIN 
+    RETURN (SELF.CPRICE * rate); 
+  END priceInUSD; 
 END;
 /
 
-(b) A method to compute the current price of stocks in US dollars, taking the current exchange rate of AUD to USD as an input parameter (assuming that the prices in the STOCKS table are in AUD).
+ALTER TYPE stock_t 
+ADD MEMBER FUNCTION countExchanges RETURN INTEGER CASCADE;
 
-ALTER TYPE STOCK_T
-ADD MEMBER FUNCTION AUDTOUSD(RATE FLOAT)
-RETURN FLOAT CASCADE
+CREATE OR REPLACE TYPE BODY stock_t AS 
+  MEMBER FUNCTION calYield RETURN FLOAT IS 
+  BEGIN 
+    RETURN ((SELF.DIVIDEND/SELF.CPRICE) * 100); 
+  END calYield; 
+   
+  MEMBER FUNCTION priceInUSD(rate FLOAT) RETURN FLOAT IS 
+  BEGIN 
+    RETURN (SELF.CPRICE * rate); 
+  END priceInUSD; 
+   
+  MEMBER FUNCTION countExchanges RETURN INTEGER IS 
+    counted INTEGER; 
+  BEGIN  
+    SELECT COUNT(*) INTO counted 
+    FROM TABLE(SELF.et); 
+    RETURN counted; 
+  END countExchanges; 
+END; 
 /
 
-CREATE OR REPLACE TYPE BODY STOCK_T AS
-MEMBER FUNCTION AUDTOUSD(RATE FLOAT)
-RETURN FLOAT IS
-	BEGIN
-		RETURN SELF.PRICE * RATE;
-	END AUDTOUSD;
-MEMBER FUNCTION YIELDS
-RETURN FLOAT IS
-	BEGIN
-		RETURN (SELF.LASTDIVIDEND / SELF.PRICE) * 100;
-	END YIELDS;
-END;
+ALTER TYPE CLIENT_T 
+ADD MEMBER FUNCTION purchaseValue RETURN NUMBER CASCADE;
+
+CREATE OR REPLACE TYPE BODY CLIENT_T AS 
+  MEMBER FUNCTION purchaseValue RETURN NUMBER IS 
+    pValue NUMBER; 
+  BEGIN 
+    SELECT SUM(I.QTY * I.PPRICE) INTO pValue 
+    FROM TABLE(SELF.investments) I; 
+    RETURN pValue; 
+  END purchaseValue; 
+END; 
 /
 
-(c) A method to count the number of exchanges where a given stock is traded.
+ALTER TYPE CLIENT_T 
+ADD MEMBER FUNCTION totalProfit RETURN NUMBER CASCADE;
 
-ALTER TYPE STOCK_T
-ADD MEMBER FUNCTION totalExchanges
-RETURN INTEGER CASCADE
+CREATE OR REPLACE TYPE BODY CLIENT_T AS 
+  MEMBER FUNCTION purchaseValue RETURN NUMBER IS 
+    pValue NUMBER; 
+  BEGIN 
+    SELECT SUM(I.QTY*I.PPRICE) INTO pValue 
+    FROM TABLE(SELF.investments) I; 
+    RETURN pValue; 
+  END purchaseValue; 
+ 
+  MEMBER FUNCTION totalProfit RETURN NUMBER IS 
+    tValue NUMBER; 
+  BEGIN 
+    SELECT SUM(I.QTY*I.COMPANY.cprice) - SUM(I.QTY*I.PPRICE) INTO tValue 
+    FROM TABLE(SELF.investments) I; 
+    RETURN tValue; 
+  END totalProfit; 
+END; 
 /
 
-CREATE OR REPLACE TYPE BODY STOCK_T AS
-MEMBER FUNCTION totalExchanges
-RETURN INTEGER IS
-	exchangeCount INTEGER;
-	BEGIN
-		SELECT COUNT(*) INTO exchangeCount FROM TABLE(SELF.EXCHANGE) e;
-		RETURN exchangeCount;
-	END totalExchanges;
-MEMBER FUNCTION YIELDS
-RETURN FLOAT IS
-	BEGIN
-		RETURN (SELF.LASTDIVIDEND / SELF.PRICE) * 100;
-	END YIELDS;
-MEMBER FUNCTION AUDTOUSD(RATE FLOAT)
-RETURN FLOAT IS
-	BEGIN
-		RETURN SELF.PRICE * RATE;
-	END AUDTOUSD;
-END;
-/
+SELECT S.company, s.countExchanges(), S.calYield() AS Yield, S.priceInUSD(0.74) AS PriceInUSD 
+FROM STOCKS S;
 
-(d) A method to compute the purchase value of all the shares of a client (for each share purchased, purchase value = purchase price * qty).
+SELECT S.company, S.cprice, S.countExchanges() AS No_Of_Exchanges 
+FROM STOCKS S 
+WHERE S.countExchanges() > 1;
 
-ALTER TYPE CLIENT_T
-ADD MEMBER FUNCTION TOTPURCHASE
-RETURN FLOAT CASCADE
-/
+SELECT DISTINCT C.name, I.company.company, I.company.calYield() AS Yield, I.company.cprice, I.company.eps 
+FROM CLIENTS C, TABLE(C.investments) I;
 
-CREATE OR REPLACE TYPE BODY CLIENT_T AS
-MEMBER FUNCTION TOTPURCHASE
-RETURN FLOAT IS
-   	PPRICE FLOAT;
-	PQTY FLOAT;
-	BEGIN
-    		SELECT i.PRICE, i.QTY INTO PPRICE, PQTY
-    		FROM TABLE(SELF.INVESTMENTS) i;
-    		RETURN PPRICE * PQTY;
-	END;
-END;
-/
+SELECT C.name, C.purchaseValue() AS TOTAL_PURCHASE_VALUE 
+FROM CLIENTS C;
 
-(e) A method to compute the total profit on all the shares of a client (for each share purchase, profit = 
-(current price - purchase price) * qty).
-
-ALTER TYPE CLIENT_T
-ADD MEMBER FUNCTION CALPROFIT
-RETURN FLOAT CASCADE
-/
-
-CREATE OR REPLACE TYPE BODY CLIENT_T AS
-MEMBER FUNCTION CALPROFIT
-RETURN FLOAT IS
-	PPRICE FLOAT;
-	PQTY FLOAT;
-	CPRICE FLOAT;
-	BEGIN
-		SELECT i.PRICE, i.QTY, i.COMPANY.PRICE INTO PPRICE, PQTY, CPRICE
-		FROM TABLE(SELF.INVESTMENTS) i;
-		RETURN (CPRICE - PPRICE) * PQTY;
-	END CALPROFIT;
-MEMBER FUNCTION TOTPURCHASE
-RETURN FLOAT IS
-	PPRICE FLOAT;
-	PQTY FLOAT;
-	BEGIN
-    		SELECT i.PRICE, i.QTY INTO PPRICE, PQTY
-    		FROM TABLE(SELF.INVESTMENTS) i;
-    		RETURN PPRICE * PQTY;
-	END TOTPURCHASE;
-END;
-/
-
-(a) Get the yield of all stocks along with their current prices in US dollars, given an exchange rate of 0.74 USD to an AUD. Display the name of the stock, the exchanges where the stock is traded, the stock’s yield and the price in USD.
-
-SELECT s.COMPANY, s.totalExchanges() EXCHANGES, s.YIELDS() YIELD, s.AUDTOUSD(0.74) PRICE
-FROM STOCKS s
-/
-
-(b) Find the company name, current price and the number of exchanges for shares that are traded on more than one exchange, using one of the methods.
-
-SELECT s.COMPANY, s.PRICE, s.totalExchanges() EXCHANGES
-FROM STOCKS s
-WHERE s.totalExchanges() > 1
-/
-
-(c) For each client, get the name, and the list of investments with stock name, yield, current price and earnings per share. Use the method for computing yield in this query.
-
-SELECT c.NAME, 
-	i.COMPANY.COMPANY STOCK, 
-	i.COMPANY.YIELDS() YIELDS,
-	i.COMPANY.PRICE PRICE,
-	i.COMPANY.EPS EARNINGS
-FROM CLIENTS c, TABLE(c.INVESTMENTS) i
-/
-
-(d) Find the total purchase value of investments for all clients. Display client name and total value. Use the method for computing purchase value in this query.
-
-SELECT c.NAME, c.TOTPURCHASE() TOTAL
-FROM CLIENTS c
-/
-
-(e) For each client, list the book profit (or loss) on the total share investment. Use the method for computing profit.
-
-SELECT c.NAME, c.CALPROFIT()
-FROM CLIENTS c
-/
+SELECT C.name, C.totalProfit() AS Book_PROFIT 
+FROM CLIENTS C;
